@@ -80,11 +80,11 @@ def simpleScene(targetCoord, cameraCoord, sunCoord, lens=35):
     return tar, cam, sun
 
 
-def setAmbientOcclusion(ambient_occulusion=True, samples=5, blend_type='ADD'):
-    # blend_type options: 'ADD', 'MULTIPLY'
+# def setAmbientOcclusion(ambient_occulusion=True, samples=5, blend_type='ADD'):
+def setAmbientOcclusion(ambient_occulusion=True):
     bpy.context.scene.world.light_settings.use_ambient_occlusion = ambient_occulusion
-    bpy.context.scene.world.light_settings.ao_blend_type = blend_type
-    bpy.context.scene.world.light_settings.samples = samples
+    # bpy.context.scene.world.light_settings.ao_blend_type = blend_type
+    # bpy.context.scene.world.light_settings.samples = samples
 
 
 def setSmooth(obj, level=None, smooth=True):
