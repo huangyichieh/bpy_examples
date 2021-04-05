@@ -57,7 +57,7 @@ def camera(origin, target=None, lens=35, clip_start=0.1, clip_end=200, type='PER
     return obj
 
 
-def light(origin, type='POINT', energy=1, color=(1,1,1), target=None):
+def light(origin, type='POINT', energy=4, color=(1,1,1), target=None):
     # Light types: 'POINT', 'SUN', 'SPOT', 'HEMI', 'AREA'
     print('createLight called')
     bpy.ops.object.add(type='LIGHT', location=origin)
@@ -158,24 +158,44 @@ def simpleMaterial(diffuse_color):
 
 
 def falloffMaterial(diffuse_color):
+    if bpy.context.scene.render.engine != "CYCLES":
+        print("WARNING:")
+        print(
+            "\tYou are using \"", bpy.context.scene.render.engine, "\"", 
+            " as current rendering engine!", sep=''
+        )
+        print("\t\"CYCLES\" engine is preferred for function falloffMaterial()")
+
     mat = bpy.data.materials.new('FalloffMaterial')
 
     # Diffuse
-    mat.diffuse_shader = 'LAMBERT'
-    mat.use_diffuse_ramp = True
-    mat.diffuse_ramp_input = 'NORMAL'
-    mat.diffuse_ramp_blend = 'ADD'
-    mat.diffuse_ramp.elements[0].color = (1, 1, 1, 1)
-    mat.diffuse_ramp.elements[1].color = (1, 1, 1, 0)
-    mat.diffuse_color = diffuse_color
-    mat.diffuse_intensity = 1.0
+    mat.diffuse_color = (*diffuse_color, 1.0)
 
-    # Specular
-    mat.specular_intensity = 0.0
+    # Remove default nodes(Principled BSDF, Material Output)
+    mat.use_nodes = True
+    tree_nodes = mat.node_tree
+    links = tree_nodes.links
+    for n in tree_nodes.nodes:
+        tree_nodes.nodes.remove(n)
 
-    # Shading
-    mat.emit = 0.05
-    mat.translucency = 0.2
+    # Add diffuse bsdf and emission
+    shader_out = tree_nodes.nodes.new('ShaderNodeOutputMaterial')
+    shader_diffuse = tree_nodes.nodes.new('ShaderNodeBsdfDiffuse')
+    shader_emission = tree_nodes.nodes.new('ShaderNodeEmission')
+    shader_translucent = tree_nodes.nodes.new('ShaderNodeBsdfTranslucent')
+
+    shader_mix1 = tree_nodes.nodes.new('ShaderNodeMixShader')
+    shader_mix2 = tree_nodes.nodes.new('ShaderNodeMixShader')
+    shader_diffuse.inputs['Color'].default_value = mat.diffuse_color
+    shader_diffuse.inputs['Roughness'].default_value = 0.0
+    shader_translucent.inputs['Color'].default_value = tuple([0.2 * i for i in mat.diffuse_color])
+    shader_emission.inputs['Color'].default_value = mat.diffuse_color
+    shader_emission.inputs['Strength'].default_value = 0.05
+    links.new(shader_diffuse.outputs[0], shader_mix1.inputs[1])
+    links.new(shader_translucent.outputs[0], shader_mix1.inputs[2])
+    links.new(shader_mix1.outputs[0], shader_mix2.inputs[1])
+    links.new(shader_emission.outputs[0], shader_mix2.inputs[2])
+    links.new(shader_mix2.outputs[0], shader_out.inputs[0])
 
     return mat
 
@@ -192,8 +212,6 @@ def renderToFolder(renderFolder='rendering', renderName='render', resX=800, resY
     scn.render.resolution_percentage = resPercentage
     if frame_end:
         scn.frame_end = frame_end
-
-    print(bpy.context.space_data)
 
     # Check if script is executed inside Blender
     if bpy.context.space_data is None:
